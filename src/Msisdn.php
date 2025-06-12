@@ -2,11 +2,10 @@
 
 namespace AdevPmftc\MsisdnPh;
 
-use Exception;
+use AdevPmftc\MsisdnPh\Exceptions\InvalidMsisdnException;
 
 class Msisdn
 {
-
     private $msisdn;
 
     private $smartPrefixes = null;
@@ -19,46 +18,55 @@ class Msisdn
 
     private $operator = null;
 
+    protected $countryPrefix = '+63';
+
+    /**
+     * Msisdn constructor.
+     *
+     * @param $msisdn
+     * @throws InvalidMsisdnException
+     */
     public function __construct($msisdn)
     {
         if (Msisdn::validate($msisdn) === false) {
-            $exception = new Exception('The supplied MSISDN is not valid. You can use the Msisdn::validate() method to validate the MSISDN being passed.', 400);
-            throw $exception;
+            throw new InvalidMsisdnException(
+                'The supplied MSISDN is not valid. ' .
+                'You can use the `Msisdn::validate()` method ' .
+                'to validate the MSISDN being passed.',
+                400
+            );
         }
 
-        $msisdn = Msisdn::clean($msisdn);
-        $this->msisdn = $msisdn;
+        $this->msisdn = self::clean($msisdn);
     }
 
     /**
      * Returns a formatted mobile number
      *
-     * @param bool|false $countryCode
+     * @param bool|false $hasCountryCode
      * @param string $separator
      * @return mixed|string
      */
-    function get($countryCode = false, $separator = '')
+    function get($hasCountryCode = false, $separator = '')
     {
-        if ($countryCode == false) {
+        if (! $hasCountryCode) {
             $formattedNumber = '0' . $this->msisdn;
 
-            if ( ! empty($separator)) {
+            if (! empty($separator)) {
                 $formattedNumber = substr_replace($formattedNumber, $separator, 4, 0);
                 $formattedNumber = substr_replace($formattedNumber, $separator, 8, 0);
             }
-
-            return $formattedNumber;
         } else {
-            $formattedNumber = '+63' . $this->msisdn;
+            $formattedNumber = $this->countryPrefix . $this->msisdn;
 
-            if ( ! empty($separator)) {
-                $formattedNumber = substr_replace($formattedNumber, $separator, 3, 0);
+            if (! empty($separator)) {
+                $formattedNumber = substr_replace($formattedNumber, $separator, strlen($this->countryPrefix), 0);
                 $formattedNumber = substr_replace($formattedNumber, $separator, 7, 0);
                 $formattedNumber = substr_replace($formattedNumber, $separator, 11, 0);
             }
-
-            return $formattedNumber;
         }
+
+        return $formattedNumber;
     }
 
     /**
@@ -80,30 +88,34 @@ class Msisdn
      *
      * @return string The operator of this number
      */
-    function getOperator()
+    public function getOperator()
     {
         $this->setPrefixes();
 
-        if ( ! empty($this->operator)) {
-            return $this->operator;
-        }
-
-        if (in_array($this->getPrefix(), $this->smartPrefixes)) {
-            $this->operator = 'SMART';
+        if (! empty($this->operator)) {
             return $this->operator;
         }
 
         if (in_array($this->getPrefix(), $this->globePrefixes)) {
             $this->operator = 'GLOBE';
+
+            return $this->operator;
+        }
+
+        if (in_array($this->getPrefix(), $this->smartPrefixes)) {
+            $this->operator = 'SMART';
+
             return $this->operator;
         }
 
         if (in_array($this->getPrefix(), $this->sunPrefixes)) {
             $this->operator = 'SUN';
+
             return $this->operator;
         }
 
         $this->operator = 'UNKNOWN';
+
         return $this->operator;
     }
 
@@ -132,15 +144,9 @@ class Msisdn
     {
         $mobileNumber = Msisdn::clean($mobileNumber);
 
-        if (empty($mobileNumber)) {
-            return false;
-        }
-
-        if (strlen($mobileNumber) != 10 || is_numeric($mobileNumber) == false) {
-            return false;
-        }
-
-        return true;
+        return ! empty($mobileNumber) &&
+            strlen($mobileNumber) === 10 &&
+            is_numeric($mobileNumber);
     }
 
     /**
@@ -154,13 +160,24 @@ class Msisdn
         $msisdn = preg_replace("/[^0-9]/", "", $msisdn);
 
         // We remove the 0 or 63 from the number
-        if (substr($msisdn, 0, 1) == '0') {
+        if (substr($msisdn, 0, 1) === '0') {
             $msisdn = substr($msisdn, 1, strlen($msisdn));
-        } else if (substr($msisdn, 0, 2) == '63') {
-            $msisdn = substr($msisdn, 2, strlen($msisdn));
+        } else {
+            if (substr($msisdn, 0, 2) === '63') {
+                $msisdn = substr($msisdn, 2, strlen($msisdn));
+            }
         }
 
         return $msisdn;
     }
 
+    /**
+     * Sets the country prefix - this defaults to +63
+     *
+     * @param $countryPrefix
+     */
+    public function setCountryPrefix($countryPrefix)
+    {
+        $this->countryPrefix = $countryPrefix;
+    }
 }
